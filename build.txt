@@ -1,0 +1,1 @@
+-cp thirdparty/json-simple/json-simple.jar Build.java
