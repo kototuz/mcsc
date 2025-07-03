@@ -107,12 +107,14 @@ public class MCSCServer {
     }
 
     static void validateParseResults(ParseResults<Object> results) throws CommandSyntaxException {
-        try {
-            Class.forName("el")
-                 .getMethod("a", ParseResults.class)
-                 .invoke(null, results);
-        } catch (Exception e) {
-            throw (CommandSyntaxException) e.getCause();
+        if (!results.getReader().canRead()) {
+            return;
+        } else if (results.getExceptions().size() == 1) {
+            throw (CommandSyntaxException)results.getExceptions().values().iterator().next();
+        } else {
+            throw results.getContext().getRange().isEmpty()
+                ? CommandSyntaxException.BUILT_IN_EXCEPTIONS.dispatcherUnknownCommand().createWithContext(results.getReader())
+                : CommandSyntaxException.BUILT_IN_EXCEPTIONS.dispatcherUnknownArgument().createWithContext(results.getReader());
         }
     }
 
