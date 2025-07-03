@@ -131,8 +131,16 @@ public class MCSCServer {
         void parseFile(String filePath) throws Exception {
             try (var reader = Files.newBufferedReader(Paths.get(filePath))) {
                 while (true) {
-                    var command = reader.readLine();
-                    if (command == null) break;
+                    String command;
+                    while (true) {
+                        command = reader.readLine();
+                        if (command == null) return;
+                        command = command.trim();
+                        if (command.equals("")) continue;
+                        if (command.charAt(0) == '#') continue;
+
+                        break;
+                    }
 
                     var results = dispatcher.parse(
                         command,
