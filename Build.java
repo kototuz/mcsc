@@ -34,30 +34,38 @@ public class Build {
     static HttpClient httpClient = HttpClient.newHttpClient();
 
     public static void main(String[] args) throws Throwable {
-        info("downloading version manifest...");
-        var resp = downloadFileAsString("https://launchermeta.mojang.com/mc/game/version_manifest.json");
-        var versionManifest = (JSONObject) JSONValue.parseWithException(resp);
-        var versionURL = find((JSONArray)versionManifest.get("versions"), (obj) -> {
-            var versionInfo = (JSONObject) obj;
-            if (versionInfo.get("id").toString().equals(VERSION)) {
-                return Optional.of(versionInfo.get("url").toString());
-            }
-            return Optional.empty();
-        });
+        JSONObject version;
+        if (args.length == 0) {
+            info("downloading version manifest...");
+            var resp = downloadFileAsString("https://launchermeta.mojang.com/mc/game/version_manifest.json");
+            var versionManifest = (JSONObject) JSONValue.parseWithException(resp);
+            var versionURL = find((JSONArray)versionManifest.get("versions"), (obj) -> {
+                var versionInfo = (JSONObject) obj;
+                if (versionInfo.get("id").toString().equals(VERSION)) {
+                    return Optional.of(versionInfo.get("url").toString());
+                }
+                return Optional.empty();
+            });
 
-        info("downloading version's json...");
-        resp = downloadFileAsString(versionURL);
-        var version = (JSONObject) JSONValue.parseWithException(resp);
-        var downloads = (JSONObject) version.get("downloads");
+            info("downloading version's json...");
+            downloadFileAsFile(versionURL, "build/version.json");
+            version = (JSONObject) JSONValue.parseWithException(Files.readString(Paths.get("build/version.json")));
 
-        var server = (JSONObject) downloads.get("server");
-        info("downloading server...");
-        downloadFileAsFile(server.get("url").toString(), "build/server.jar");
+            var downloads = (JSONObject) version.get("downloads");
 
-        info("downloading server mappings...");
-        var serverMappingsURL = ((JSONObject)downloads.get("server_mappings")).get("url").toString();
-        var serverMappings = downloadFileAsString(serverMappingsURL);
-        extractMappingsIntoClass(serverMappings);
+            info("downloading server...");
+            var server = (JSONObject) downloads.get("server");
+            downloadFileAsFile(server.get("url").toString(), "build/server.jar");
+
+            info("downloading server mappings...");
+            var serverMappingsURL = ((JSONObject)downloads.get("server_mappings")).get("url").toString();
+            var serverMappings = downloadFileAsString(serverMappingsURL);
+            extractMappingsIntoClass(serverMappings);
+        } else if (args.length == 1 && args[0].equals("local")) {
+            version = (JSONObject) JSONValue.parseWithException(Files.readString(Paths.get("build/version.json")));
+        } else {
+            throw new RuntimeException("Unknown argument");
+        }
 
         info("building MCSC server...");
         var compileCmd = new ArrayList<String>();
