@@ -83,7 +83,7 @@ public class Build {
         ));
         runCmd(Arrays.asList(
             "jar", "-cfe",
-            "build/mcsc_client.jar", "MCSCClient",
+            "build/bin/mcsc_client.jar", "MCSCClient",
             "-C", "build/classes/mcsc-client", "."
         ));
 
@@ -98,8 +98,8 @@ public class Build {
 
         info("building minecraft server launcher...");
         runCmd(Arrays.asList(
-            "javac", "src/MinecraftServerLauncher.java",
-            "-d", "build/classes/minecraft-server-launcher"
+            "javac", "src/MCServerLauncher.java",
+            "-d", "build/classes/mc-server-launcher"
         ));
         buildLauncherJar(brigadierLibName);
     }
@@ -107,12 +107,12 @@ public class Build {
     static void buildLauncherJar(String brigadierLibName) throws Exception {
         var manifest = new Manifest();
         manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
-        manifest.getMainAttributes().put(Attributes.Name.MAIN_CLASS, "MinecraftServerLauncher");
-        var newJar = new JarOutputStream(new FileOutputStream("build/minecraft-server-launcher.jar"), manifest);
+        manifest.getMainAttributes().put(Attributes.Name.MAIN_CLASS, "MCServerLauncher");
+        var newJar = new JarOutputStream(new FileOutputStream("build/bin/mc-server-launcher.jar"), manifest);
 
-        var mainEntry = new JarEntry("MinecraftServerLauncher.class");
+        var mainEntry = new JarEntry("MCServerLauncher.class");
         newJar.putNextEntry(mainEntry);
-        new FileInputStream("build/classes/minecraft-server-launcher/MinecraftServerLauncher.class").transferTo(newJar);
+        new FileInputStream("build/classes/mc-server-launcher/MCServerLauncher.class").transferTo(newJar);
         newJar.closeEntry();
 
         var brigadierEntry = new JarEntry(brigadierLibName);
@@ -208,3 +208,5 @@ public class Build {
         System.out.println("info: " + msg);
     }
 }
+
+// TODO: Local rebuild

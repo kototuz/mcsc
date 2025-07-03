@@ -31,10 +31,10 @@ java @build.txt
 
 Run server:
 ``` console
-java -jar build/minecraft-server-launcher.jar
+java -jar build/bin/minecraft-server-launcher.jar
 ```
 
 Client:
 ``` console
-java -jar build/mcsc_client.jar <files>
+java -jar build/bin/mcsc_client.jar <files>
 ```

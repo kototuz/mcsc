@@ -7,10 +7,10 @@ import java.nio.file.Paths;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 
-public class MinecraftServerLauncher {
+public class MCServerLauncher {
     public static void main(String[] args) throws Exception {
         var jarPath = Paths.get(
-            MinecraftServerLauncher.class
+            MCServerLauncher.class
                 .getProtectionDomain()
                 .getCodeSource()
                 .getLocation()
