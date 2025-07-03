@@ -157,7 +157,10 @@ public class Build {
     }
 
     static void runCmd(List<String> cmd) throws Throwable {
-        int exitCode = new ProcessBuilder(cmd).start().waitFor();
+        var procBuilder = new ProcessBuilder(cmd);
+        procBuilder.inheritIO();
+
+        int exitCode = procBuilder.start().waitFor();
         if (exitCode != 0) {
             throw new RuntimeException("Command failed");
         }
