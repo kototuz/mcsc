@@ -26,14 +26,15 @@ java @build.txt
 
 ## Usage
 
-Go to `playground/`
+> [!WARNING]
+> At the moment you must run both the server and the client in the same directory
 
 Run server:
 ``` console
-java @run_server.txt
+java -jar build/minecraft-server-launcher.jar
 ```
 
 Client:
 ``` console
-java -jar mcsc_client.jar <files>
+java -jar build/mcsc_client.jar <files>
 ```

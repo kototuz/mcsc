@@ -15,6 +15,10 @@ import java.util.stream.*;
 import java.util.jar.JarFile;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
+import java.util.jar.Manifest;
+import java.util.jar.Attributes;
+import java.util.jar.JarOutputStream;
+import java.util.jar.JarEntry;
 
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
@@ -22,6 +26,8 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.charset.StandardCharsets;
+import java.io.FileOutputStream;
+import java.io.FileInputStream;
 
 public class Build {
     static String VERSION = "1.21.6";
@@ -47,32 +53,6 @@ public class Build {
         var server = (JSONObject) downloads.get("server");
         info("downloading server...");
         downloadFileAsFile(server.get("url").toString(), "build/server.jar");
-        info("unpacking server...");
-        var classPath = new StringBuilder();
-        var jar = new JarFile("build/server.jar");
-        for (var entry : jar.stream().collect(Collectors.toList())) {
-            if (entry.isDirectory()) continue;
-            if (!entry.getName().endsWith(".jar")) continue;
-
-            var name = entry.getName().replace("META-INF/", "");
-            classPath.append(name+":");
-            var outputPath = Paths.get("playground/" + name);
-            Files.createDirectories(outputPath.getParent());
-            Files.copy(
-                jar.getInputStream(entry),
-                outputPath,
-                StandardCopyOption.REPLACE_EXISTING
-            );
-        }
-
-        info("generating 'run_server.txt'...");
-        classPath.deleteCharAt(classPath.length()-1);
-        Files.write(
-            Paths.get("playground/run_server.txt"),
-            "-cp %s net.minecraft.server.Main nogui"
-                .formatted(classPath.toString())
-                .getBytes()
-        );
 
         info("downloading server mappings...");
         var serverMappingsURL = ((JSONObject)downloads.get("server_mappings")).get("url").toString();
@@ -80,14 +60,6 @@ public class Build {
         extractMappingsIntoClass(serverMappings);
 
         info("building MCSC server...");
-        var brigadierLibPath = find((JSONArray)version.get("libraries"), (obj) -> {
-            var library = (JSONObject) obj;
-            if (library.get("name").toString().startsWith("com.mojang:brigadier")) {
-                var artifact = (JSONObject) ((JSONObject)library.get("downloads")).get("artifact");
-                return Optional.of(artifact.get("path").toString());
-            }
-            return Optional.empty();
-        });
         var compileCmd = new ArrayList<String>();
         compileCmd.add("javac");
         compileCmd.addAll(findFilesRecursively("thirdparty/brigadier/src"));
@@ -99,7 +71,7 @@ public class Build {
         runCmd(compileCmd);
         runCmd(Arrays.asList(
             "jar", "-cf",
-            "playground/libraries/" + brigadierLibPath,
+            "build/brigadier.jar",
             "-C", "build/classes/mcsc-server", "."
         ));
 
@@ -111,15 +83,60 @@ public class Build {
         ));
         runCmd(Arrays.asList(
             "jar", "-cfe",
-            "playground/mcsc_client.jar", "MCSCClient",
+            "build/mcsc_client.jar", "MCSCClient",
             "-C", "build/classes/mcsc-client", "."
         ));
 
-        info("generating eula...");
-        Files.write(
-            Paths.get("playground/eula.txt"),
-            "eula=true".getBytes()
-        );
+        var brigadierLibName = find((JSONArray)version.get("libraries"), (obj) -> {
+            var library = (JSONObject) obj;
+            if (library.get("name").toString().startsWith("com.mojang:brigadier")) {
+                var artifact = (JSONObject) ((JSONObject)library.get("downloads")).get("artifact");
+                return Optional.of(Paths.get(artifact.get("path").toString()).getFileName().toString());
+            }
+            return Optional.empty();
+        });
+
+        info("building minecraft server launcher...");
+        runCmd(Arrays.asList(
+            "javac", "src/MinecraftServerLauncher.java",
+            "-d", "build/classes/minecraft-server-launcher"
+        ));
+        buildLauncherJar(brigadierLibName);
+    }
+
+    static void buildLauncherJar(String brigadierLibName) throws Exception {
+        var manifest = new Manifest();
+        manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+        manifest.getMainAttributes().put(Attributes.Name.MAIN_CLASS, "MinecraftServerLauncher");
+        var newJar = new JarOutputStream(new FileOutputStream("build/minecraft-server-launcher.jar"), manifest);
+
+        var mainEntry = new JarEntry("MinecraftServerLauncher.class");
+        newJar.putNextEntry(mainEntry);
+        new FileInputStream("build/classes/minecraft-server-launcher/MinecraftServerLauncher.class").transferTo(newJar);
+        newJar.closeEntry();
+
+        var brigadierEntry = new JarEntry(brigadierLibName);
+        newJar.putNextEntry(brigadierEntry);
+        new FileInputStream("build/brigadier.jar").transferTo(newJar);
+        newJar.closeEntry();
+
+        var serverJar = new JarFile("build/server.jar");
+        for (var entry : serverJar.stream().collect(Collectors.toList())) {
+            var entryName = entry.getName();
+            if (!entryName.endsWith(".jar")) continue;
+
+            var libName = Paths.get(entryName).getFileName().toString();
+            var newEntry = new JarEntry(libName);
+
+            if (!libName.equals(brigadierLibName)) {
+                newJar.putNextEntry(newEntry);
+                serverJar.getInputStream(entry).transferTo(newJar);
+                newJar.closeEntry();
+            }
+        }
+
+        serverJar.close();
+        newJar.close();
     }
 
     static void extractMappingsIntoClass(String mappings) throws Throwable {
