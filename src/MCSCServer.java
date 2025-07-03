@@ -57,41 +57,6 @@ public class MCSCServer {
         }
     }
 
-    static void parseFile(CommandDispatcher<Object> dispatcher, String filePath, FilePipe pipe) throws Exception {
-        try (var reader = Files.newBufferedReader(Paths.get(filePath))) {
-            while (true) {
-                var command = reader.readLine();
-                if (command == null) break;
-
-                try {
-                    var results = dispatcher.parse(command, createPermissionSourceInstance());
-                    validateParseResults(results);
-                    ContextChain.tryFlatten(results.getContext().build(command))
-                        .orElseThrow(() -> CommandSyntaxException.BUILT_IN_EXCEPTIONS.dispatcherUnknownCommand().createWithContext(results.getReader()));
-                } catch (CommandSyntaxException e) {
-                    pipe.write(e.getRawMessage().getString() + "\n");
-                    if (e.getInput() != null && e.getCursor() >= 0) {
-                        int a = Math.min(e.getInput().length(), e.getCursor());
-                        var sb = new StringBuilder();
-
-                        if (a > 10) {
-                            sb.append("...");
-                        }
-
-                        sb.append(e.getInput().substring(Math.max(0, a - 10), a));
-                        if (a < e.getInput().length()) {
-                            sb.append(e.getInput().substring(a));
-                        }
-
-                        sb.append("<--[HERE]\n");
-
-                        pipe.write(sb.toString());
-                    }
-                }
-            }
-        }
-    }
-
     static Object createPermissionSourceInstance() throws Exception {
         var permissionSourceInterface = Class.forName(Mappings.PERMISSION_SOURCE);
         return Proxy.newProxyInstance(
@@ -104,18 +69,6 @@ public class MCSCServer {
                 }
             }
         );
-    }
-
-    static void validateParseResults(ParseResults<Object> results) throws CommandSyntaxException {
-        if (!results.getReader().canRead()) {
-            return;
-        } else if (results.getExceptions().size() == 1) {
-            throw (CommandSyntaxException)results.getExceptions().values().iterator().next();
-        } else {
-            throw results.getContext().getRange().isEmpty()
-                ? CommandSyntaxException.BUILT_IN_EXCEPTIONS.dispatcherUnknownCommand().createWithContext(results.getReader())
-                : CommandSyntaxException.BUILT_IN_EXCEPTIONS.dispatcherUnknownArgument().createWithContext(results.getReader());
-        }
     }
 
     static class Parser {
@@ -178,6 +131,18 @@ public class MCSCServer {
                         }
                     }
                 }
+            }
+        }
+
+        static void validateParseResults(ParseResults<Object> results) throws CommandSyntaxException {
+            if (!results.getReader().canRead()) {
+                return;
+            } else if (results.getExceptions().size() == 1) {
+                throw (CommandSyntaxException)results.getExceptions().values().iterator().next();
+            } else {
+                throw results.getContext().getRange().isEmpty()
+                    ? CommandSyntaxException.BUILT_IN_EXCEPTIONS.dispatcherUnknownCommand().createWithContext(results.getReader())
+                    : CommandSyntaxException.BUILT_IN_EXCEPTIONS.dispatcherUnknownArgument().createWithContext(results.getReader());
             }
         }
     }
