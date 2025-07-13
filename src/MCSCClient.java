@@ -2,7 +2,7 @@ import utils.FilePipe;
 
 public class MCSCClient {
     public static void main(String[] args) throws Throwable {
-        try (var pipe = new FilePipe("pipe")) {
+        try (var pipe = new FilePipe()) {
             try (var lock = pipe.lockForWrite()) {
                 pipe.write(String.join("\n", args));
             }

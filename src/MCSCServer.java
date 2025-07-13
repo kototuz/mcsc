@@ -22,7 +22,7 @@ import utils.FilePipe;
 public class MCSCServer {
     static FilePipe fp;
     public static void main(CommandDispatcher<Object> dispatcher) {
-        try (var pipe = new FilePipe("pipe")) {
+        try (var pipe = new FilePipe()) {
             long size = 0;
             Parser parser = new Parser(dispatcher, pipe);
             while (true) {

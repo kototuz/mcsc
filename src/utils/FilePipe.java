@@ -6,11 +6,13 @@ import java.nio.file.*;
 import java.nio.ByteBuffer;
 
 public class FilePipe implements AutoCloseable {
+    private static final Path PIPE_PATH = Paths.get("/tmp/mcsc.pipe");
+
     public FileChannel channel;
 
-    public FilePipe(String path) throws Exception {
+    public FilePipe() throws Exception {
         this.channel = FileChannel.open(
-            Paths.get(path),
+            PIPE_PATH,
             StandardOpenOption.CREATE, 
             StandardOpenOption.READ,
             StandardOpenOption.WRITE,
