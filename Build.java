@@ -33,7 +33,7 @@ public class Build {
     static String VERSION = "1.21.6";
     static HttpClient httpClient = HttpClient.newHttpClient();
 
-    public static void main(String[] args) throws Throwable {
+    public static void main(String[] args) throws Exception {
         JSONObject version;
         if (args.length == 0) {
             info("downloading version manifest...");
@@ -147,7 +147,7 @@ public class Build {
         newJar.close();
     }
 
-    static void extractMappingsIntoClass(String mappings) throws Throwable {
+    static void extractMappingsIntoClass(String mappings) throws Exception {
         var matcher = Pattern.compile(
             "net\\.minecraft\\.commands\\.PermissionSource -> (\\w+):"
         ).matcher(mappings);
@@ -164,7 +164,7 @@ public class Build {
         );
     }
 
-    static void runCmd(List<String> cmd) throws Throwable {
+    static void runCmd(List<String> cmd) throws Exception {
         var procBuilder = new ProcessBuilder(cmd);
         procBuilder.inheritIO();
 
@@ -174,7 +174,7 @@ public class Build {
         }
     }
 
-    static List<String> findFilesRecursively(String directoryPath) throws Throwable {
+    static List<String> findFilesRecursively(String directoryPath) throws Exception {
         try (Stream<Path> stream = Files.walk(Paths.get(directoryPath))) {
             return stream
                 .filter(Files::isRegularFile)
@@ -194,7 +194,7 @@ public class Build {
         throw new RuntimeException("Element not found");
     }
 
-    static void downloadFileAsFile(String fileURL, String outputPathString) throws Throwable {
+    static void downloadFileAsFile(String fileURL, String outputPathString) throws Exception {
         Path outputPath = Paths.get(outputPathString);
         Files.createDirectories(outputPath.getParent());
         Files.copy(
@@ -204,7 +204,7 @@ public class Build {
         );
     }
 
-    static String downloadFileAsString(String url) throws Throwable {
+    static String downloadFileAsString(String url) throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url))
             .build();
@@ -220,4 +220,8 @@ public class Build {
     }
 }
 
-// TODO: Local rebuild
+// TODO: Improve build system:
+// Maybe we should create two files: `Download.java`, `Build.java`
+// One is for downloading content and another for building. Then
+// if we need the new version we run `Download.java` and `Build.java`,
+// but if we need just local recompiling we can use `Build.java`
