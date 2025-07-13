@@ -116,6 +116,7 @@ public class MCSCServer {
                             int a = Math.min(e.getInput().length(), e.getCursor());
                             var sb = new StringBuilder();
 
+                            sb.append("    ");
                             if (a > 10) {
                                 sb.append("...");
                             }

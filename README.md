@@ -26,10 +26,13 @@ java @build.txt
 
 ## Usage
 
-> [!WARNING]
-> At the moment you must run both the server and the client in the same directory
-
 Run server:
+
+> [!NOTE]
+> At the moment you should run the server every time in the same directory
+> because the server search for libraries in the current working directory
+> and if it does not find them it will produce new ones
+
 ``` console
 java -jar build/bin/mcsc_server.jar
 ```
