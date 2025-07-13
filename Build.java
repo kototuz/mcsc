@@ -116,7 +116,7 @@ public class Build {
         var manifest = new Manifest();
         manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
         manifest.getMainAttributes().put(Attributes.Name.MAIN_CLASS, "MCServerLauncher");
-        var newJar = new JarOutputStream(new FileOutputStream("build/bin/mc-server-launcher.jar"), manifest);
+        var newJar = new JarOutputStream(new FileOutputStream("build/bin/mcsc_server.jar"), manifest);
 
         var mainEntry = new JarEntry("MCServerLauncher.class");
         newJar.putNextEntry(mainEntry);

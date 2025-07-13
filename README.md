@@ -31,7 +31,7 @@ java @build.txt
 
 Run server:
 ``` console
-java -jar build/bin/minecraft-server-launcher.jar
+java -jar build/bin/mcsc_server.jar
 ```
 
 Client:
