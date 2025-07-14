@@ -20,8 +20,19 @@ through a file, which is something like a pipe.
 
 ## Build
 
+Download version stuff:
+
+> [!WARNING]
+> At the moment it is recommended to use only `1.21.7` version.
+> Other versions may not work
+
 ``` console
-java @build.txt
+java @download.txt 1.21.7
+```
+
+Build:
+``` console
+java Build.java
 ```
 
 ## Usage
