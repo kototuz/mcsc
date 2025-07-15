@@ -27,6 +27,7 @@ Download version stuff:
 > Other versions may not work
 
 ``` console
+java @download.txt -help
 java @download.txt 1.21.7
 ```
 

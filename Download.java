@@ -20,62 +20,130 @@ public class Download {
     static final HttpClient HTTP_CLIENT      = HttpClient.newHttpClient();
     static final String VERSION_MANIFEST_URL = "https://launchermeta.mojang.com/mc/game/version_manifest.json";
 
+    static String     manifestStr;
+    static JSONObject manifestJson;
+    static String     versionStr;
+    static JSONObject versionJson;
+    static JSONObject versionDownloadsJson;
+    static String     mappingsStr;
+
     public static void main(String[] args) throws Exception {
-        // TODO: Introduce different commands. Something like this:
-        //       -list-versions
-        //       -download-mappings-file
-        //       -download-manifest-file
-        //       -download-version-file
-        if (args.length > 1) {
-            System.err.println("error: specify minecraft version or nothing");
+        if (args.length == 0) {
+            downloadManifest();
+            downloadLatestVersionInfo();
+            extractBrigadierLibName();
+            downloadMappings();
+            extractMappingsIntoClass();
+            downloadServer();
+            return;
+        }
+
+        if (args.length == 1 && args[0].charAt(0) != '-') {
+            downloadManifest();
+            downloadVersionInfo(args[0]);
+            extractBrigadierLibName();
+            downloadMappings();
+            extractMappingsIntoClass();
+            downloadServer();
+            return;
+        }
+
+        switch (args[0]) {
+        case "-help":
+            help();
+            break;
+
+        case "-list-versions":
+            downloadManifest();
+            var list = (JSONArray) manifestJson.get("versions");
+            for (int i = list.size() - 1; i >= 0; i--)
+                System.out.println(
+                    ((JSONObject)list.get(i)).get("id").toString()
+                );
+            break;
+
+        case "-download-manifest-file":
+            downloadManifest();
+            writeStringToFile(manifestStr, "manifest.json");
+            break;
+
+        case "-download-version-file":
+            downloadManifest();
+            if (args.length > 1)
+                downloadVersionInfo(args[1]);
+            else
+                downloadLatestVersionInfo();
+            writeStringToFile(versionStr, "version.json");
+            break;
+
+        case "-download-mappings-file":
+            downloadManifest();
+            if (args.length > 1)
+                downloadVersionInfo(args[1]);
+            else
+                downloadLatestVersionInfo();
+            downloadMappings();
+            writeStringToFile(mappingsStr, "mappings.txt");
+            break;
+
+        default:
+            System.err.println("error: invalid option");
+            help();
             System.exit(1);
         }
+    }
 
+    static void help() {
+        System.out.println("""
+            available arguments:
+                [<version>]                           download <version> or latest
+                -help                                 print this help
+                -list-versions                        list all available versions
+                -download-manifest-file               download manifest as file 
+                -download-version-file [<version>]    download version info as file 
+                -download-mappings-file [<version>]   download mappings as file"""
+        );
+    }
+
+    static void downloadManifest() throws Exception {
         info("downloading version manifest...");
-        var resp = downloadFileAsString(VERSION_MANIFEST_URL);
-        var versionManifest = (JSONObject) JSONValue.parseWithException(resp);
+        manifestStr = downloadFileAsString(VERSION_MANIFEST_URL);
+        manifestJson = (JSONObject) JSONValue.parseWithException(manifestStr);
+    }
 
-        String targetVersion;
-        if (args.length == 1) {
-            info("selected version: " + args[0]);
-            targetVersion = args[0];
-        } else {
-            info("selected version: latest");
-            targetVersion = ((JSONObject)versionManifest.get("latest"))
-                .get("release").toString();
-        }
-
-        var versionURL = find((JSONArray)versionManifest.get("versions"), (obj) -> {
+    static void downloadVersionInfo(String version) throws Exception {
+        info("downloading " + version + " info...");
+        var versionURL = find((JSONArray)manifestJson.get("versions"), (obj) -> {
             var versionInfo = (JSONObject) obj;
-            if (versionInfo.get("id").toString().equals(targetVersion)) {
+            if (versionInfo.get("id").toString().equals(version)) {
                 return Optional.of(versionInfo.get("url").toString());
             }
             return Optional.empty();
         });
 
-        info("downloading " + targetVersion + " info...");
-        resp = downloadFileAsString(versionURL);
-        var versionInfo = (JSONObject) JSONValue.parseWithException(resp);
+        versionStr = downloadFileAsString(versionURL);
+        versionJson = (JSONObject) JSONValue.parseWithException(versionStr);
+        versionDownloadsJson = (JSONObject) versionJson.get("downloads");
+    }
 
-        var downloads = (JSONObject) versionInfo.get("downloads");
+    static void downloadLatestVersionInfo() throws Exception {
+        var latestVersion = ((JSONObject)manifestJson
+                .get("latest"))
+                .get("release");
+        downloadVersionInfo(latestVersion.toString());
+    }
 
-        Files.createDirectories(Paths.get("build/version/"));
-
+    static void downloadMappings() throws Exception {
         info("downloading server mappings...");
-        var serverMappingsURL = ((JSONObject)downloads.get("server_mappings")).get("url").toString();
-        var serverMappings = downloadFileAsString(serverMappingsURL);
-        extractMappingsIntoClass(serverMappings);
+        var serverMappingsURL = ((JSONObject)versionDownloadsJson
+                .get("server_mappings"))
+                .get("url").toString();
+        mappingsStr = downloadFileAsString(serverMappingsURL);
+    }
 
-        var brigadierLibName = find((JSONArray)versionInfo.get("libraries"), (obj) -> { var library = (JSONObject) obj; if (library.get("name").toString().startsWith("com.mojang:brigadier")) {
-                var artifact = (JSONObject) ((JSONObject)library.get("downloads")).get("artifact");
-                return Optional.of(Paths.get(artifact.get("path").toString()).getFileName().toString());
-            }
-            return Optional.empty();
-        });
-        Files.write(Paths.get("build/version/brigadier_lib_name.txt"), brigadierLibName.getBytes());
-
+    static void downloadServer() throws Exception {
         info("downloading server...");
-        var server = (JSONObject) downloads.get("server");
+        var server = (JSONObject) versionDownloadsJson.get("server");
         downloadFileAsFile(server.get("url").toString(), "build/version/server.jar");
     }
 
@@ -83,24 +151,41 @@ public class Download {
     //       I think we should not implement this function for each version
     //       in `Download.java`. We can just extract all mappings and
     //       generate a class.
-    static void extractMappingsIntoClass(String mappings) throws Exception {
+    static void extractMappingsIntoClass() throws Exception {
         var matcher = Pattern.compile(
             "net\\.minecraft\\.commands\\.PermissionSource -> (\\w+):"
-        ).matcher(mappings);
+        ).matcher(mappingsStr);
         if (!matcher.find()) {
             info("mappings not found");
             return;
         }
 
-        Files.write(
-            Paths.get("build/version/Mappings.java"),
+        writeStringToFile(
             """
             package build;
             public class Mappings {
                 public static final String PERMISSION_SOURCE = \"%s\";
             }
-            """.formatted(matcher.group(1)).getBytes()
+            """.formatted(matcher.group(1)),
+            "build/version/Mappings.java"
         );
+    }
+
+    static void extractBrigadierLibName() throws Exception {
+        var brigadierLibName = find((JSONArray)versionJson.get("libraries"), (obj) -> {
+            var library = (JSONObject) obj;
+            if (library.get("name").toString().startsWith("com.mojang:brigadier")) {
+                var artifact = (JSONObject) ((JSONObject)library.get("downloads")).get("artifact");
+                return Optional.of(Paths.get(artifact.get("path").toString()).getFileName().toString());
+            }
+            return Optional.empty();
+        });
+
+        Files.write(Paths.get("build/version/brigadier_lib_name.txt"), brigadierLibName.getBytes());
+    }
+
+    static void writeStringToFile(String str, String outputPath) throws Exception {
+        Files.write(Paths.get(outputPath), str.getBytes());
     }
 
     static <T> T find(JSONArray src, Function<Object, Optional<T>> p) {
