@@ -2,34 +2,50 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.stream.*;
-import java.util.jar.JarFile;
-import java.util.jar.Manifest;
-import java.util.jar.Attributes;
-import java.util.jar.JarOutputStream;
-import java.util.jar.JarEntry;
-import java.util.HashMap;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.io.FileOutputStream;
-import java.io.FileInputStream;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.FileSystem;
+import java.io.DataOutputStream;
+import java.io.ByteArrayOutputStream;
+
+import cn.maxpixel.mcdecompiler.util.JarUtil;
+import cn.maxpixel.mcdecompiler.util.FileUtil;
+
+import javassist.ClassPool;
+import javassist.bytecode.CodeIterator;
+import javassist.bytecode.Opcode;
+import javassist.bytecode.ConstPool;
+import javassist.bytecode.Bytecode;
 
 public class Build {
     public static void main(String[] args) throws Exception {
-        var buildSteps = new HashMap<String, RunnableWithException>();
-        buildSteps.put("server",   Build::buildServer);
-        buildSteps.put("client",   Build::buildClient);
-        buildSteps.put("launcher", Build::buildLauncher);
-
         if (args.length == 0) {
-            for (var buildStep : buildSteps.values()) {
-                buildStep.run();
-            }
-        } else if (args.length == 1) {
-            buildSteps.get(args[0]).run();
-        } else {
-            System.err.println("error: incorrect arguments");
+            compile();
+            buildServer();
+            buildClient();
+            return;
+        }
+
+        switch (args[0]) {
+        case "compile":
+            compile();
+            break;
+
+        case "server":
+            compile();
+            buildServer();
+            break;
+
+        case "client":
+            compile();
+            buildClient();
+            break;
+
+        default:
+            System.err.println("error: incorrect argument: " + args[0]);
             System.exit(1);
         }
     }
@@ -37,87 +53,133 @@ public class Build {
     static void buildServer() throws Exception {
         info("building server...");
 
-        var compileCmd = new ArrayList<String>();
-        compileCmd.add("javac");
-        compileCmd.addAll(findFilesRecursively("thirdparty/brigadier/src"));
-        compileCmd.add("src/MCSCServer.java");
-        compileCmd.add("build/version/Mappings.java");
-        compileCmd.add("src/utils/FilePipe.java");
-        compileCmd.add("-d");
-        compileCmd.add("build/classes/mcsc-server");
-        runCmd(compileCmd);
+        Files.createDirectories(Paths.get("build/bin/"));
 
-        runCmd(
-            "jar", "-cf",
-            "build/brigadier.jar",
-            "-C", "build/classes/mcsc-server", "."
+        Files.copy(
+            Paths.get("build/version/server.jar"),
+            Paths.get("build/bin/server.jar"),
+            StandardCopyOption.REPLACE_EXISTING
         );
+
+        Files.copy(
+            Paths.get("build/version/server_launcher.jar"),
+            Paths.get("build/bin/server_launcher.jar"),
+            StandardCopyOption.REPLACE_EXISTING
+        );
+
+        injectOurCodeInto("build/bin/server.jar");
+        injectServerJarInto("build/bin/server_launcher.jar");
+
+        Files.delete(Paths.get("build/bin/server.jar"));
     }
 
     static void buildClient() throws Exception {
         info("building client...");
-
         runCmd(
-            "javac", "src/MCSCClient.java",
-            "src/utils/FilePipe.java",
-            "-d", "build/classes/mcsc-client"
-        );
-
-        runCmd(
-            "jar", "-cfe",
-            "build/bin/mcsc_client.jar", "MCSCClient",
-            "-C", "build/classes/mcsc-client", "."
+            "jar", "cfe", "build/bin/client.jar", "client.Main",
+            "-C", "build", "client",
+            "-C", "build", "utils"
         );
     }
 
-    static void buildLauncher() throws Exception {
-        info("building launcher...");
+    static void compile() throws Exception {
+        info("compiling...");
 
-        runCmd(
-            "javac", "src/MCServerLauncher.java",
-            "-d", "build/classes/mc-server-launcher"
-        );
+        var compileCmd = new ArrayList<String>();
+        compileCmd.add("javac");
+        compileCmd.add("-Xlint:unchecked");
+        compileCmd.addAll(findFilesRecursively("src"));
+        compileCmd.add("-d");
+        compileCmd.add("build");
 
-        var brigadierLibName = Files.readString(
-            Paths.get("build/version/brigadier_lib_name.txt")
-        );
-
-        buildLauncherJar(brigadierLibName);
+        runCmd(compileCmd);
     }
 
-    static void buildLauncherJar(String brigadierLibName) throws Exception {
-        var manifest = new Manifest();
-        manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
-        manifest.getMainAttributes().put(Attributes.Name.MAIN_CLASS, "MCServerLauncher");
-        var newJar = new JarOutputStream(new FileOutputStream("build/bin/mcsc_server.jar"), manifest);
+    static void injectServerJarInto(String launcherJarPath) throws Exception {
+        try (var launcherJarFs = JarUtil.createZipFs(Paths.get(launcherJarPath))) {
+            var serverJarPath = FileUtil.iterateFiles(launcherJarFs.getPath(""))
+                .filter(p -> p.startsWith("META-INF/versions/"))
+                .findFirst()
+                .get();
 
-        var mainEntry = new JarEntry("MCServerLauncher.class");
-        newJar.putNextEntry(mainEntry);
-        new FileInputStream("build/classes/mc-server-launcher/MCServerLauncher.class").transferTo(newJar);
-        newJar.closeEntry();
+            Files.copy(
+                Paths.get("build/bin/server.jar"),
+                serverJarPath,
+                StandardCopyOption.REPLACE_EXISTING
+            );
+        }
+    }
 
-        var brigadierEntry = new JarEntry(brigadierLibName);
-        newJar.putNextEntry(brigadierEntry);
-        new FileInputStream("build/brigadier.jar").transferTo(newJar);
-        newJar.closeEntry();
+    static void injectOurCodeInto(String serverJarPath) throws Exception {
+        try (var serverJarFs = JarUtil.createZipFs(Paths.get(serverJarPath))) {
+            var root = serverJarFs.getPath("");
+            copyDirectory(Paths.get("build/server"), root);
+            copyDirectory(Paths.get("build/utils"), root);
 
-        var serverJar = new JarFile("build/version/server.jar");
-        for (var entry : serverJar.stream().collect(Collectors.toList())) {
-            var entryName = entry.getName();
-            if (!entryName.endsWith(".jar")) continue;
+            injectCallToOurServer(serverJarPath, serverJarFs);
+        }
+    }
 
-            var libName = Paths.get(entryName).getFileName().toString();
-            var newEntry = new JarEntry(libName);
+    static void injectCallToOurServer(String serverJarPath, FileSystem serverJarFs) throws Exception {
+        var pool = ClassPool.getDefault();
+        pool.appendClassPath(serverJarPath);
 
-            if (!libName.equals(brigadierLibName)) {
-                newJar.putNextEntry(newEntry);
-                serverJar.getInputStream(entry).transferTo(newJar);
-                newJar.closeEntry();
+        var cc = pool.get("net.minecraft.server.Main");
+        var cf = cc.getClassFile();
+
+        var methodInfo = cf.getMethod("main");
+        var cp = methodInfo.getConstPool();
+        var codeIter = methodInfo.getCodeAttribute().iterator();
+
+        var storeInstBeginIdx = skipUntilServerStoreInst(codeIter, cp);
+        var serverVarIdx = codeIter.byteAt(storeInstBeginIdx + 1);
+
+        var newCode = new Bytecode(cp);
+        newCode.addAload(serverVarIdx);
+        newCode.addInvokestatic("server.Main", "init", "(Ljava/lang/Object;)V");
+        codeIter.insert(newCode.get());
+
+        methodInfo.setCodeAttribute(codeIter.get());
+
+        var tmpBuf = new ByteArrayOutputStream(cc.toBytecode().length);
+        cf.write(new DataOutputStream(tmpBuf));
+
+        Files.write(
+            serverJarFs.getPath("net/minecraft/server/Main.class"),
+            tmpBuf.toByteArray()
+        );
+    }
+
+    static int skipUntilServerStoreInst(CodeIterator codeIter, ConstPool cp) throws Exception {
+        while (codeIter.hasNext()) {
+            int inst_begin_idx = codeIter.next();
+            if (codeIter.byteAt(inst_begin_idx) == Opcode.INVOKESTATIC) {
+                var returnClassName = cp.getMethodrefClassName(codeIter.u16bitAt(inst_begin_idx + 1));
+                if (returnClassName.equals("net.minecraft.server.MinecraftServer")) {
+                    while (codeIter.hasNext()) {
+                        inst_begin_idx = codeIter.next();
+                        if (codeIter.byteAt(inst_begin_idx) == Opcode.ASTORE) {
+                            return inst_begin_idx;
+                        }
+                    }
+
+                    throw new RuntimeException("Could not find server store instruction");
+                }
             }
         }
 
-        serverJar.close();
-        newJar.close();
+        throw new RuntimeException("Could not find server init instruction");
+    }
+
+    public static void copyDirectory(Path dirSrc, Path dirDest) throws Exception {
+        var paths = FileUtil.iterateFiles(dirSrc).collect(Collectors.toList());
+        for (var path : paths) {
+            var pathWithoutDirSrc = path.subpath(
+                dirSrc.getNameCount()-1,
+                path.getNameCount()
+            ).toString();
+            FileUtil.copyFile(path, dirDest.resolve(pathWithoutDirSrc));
+        }
     }
 
     static void runCmd(List<String> cmd) throws Exception {
@@ -151,9 +213,3 @@ public class Build {
         public void run() throws Exception;
     }
 }
-
-// TODO: Change the system of injection our code into the minecraft server
-//       To be more independent we need to get rid of using `brigadier`.
-//       We only need to get instance of the server in the server main
-//       function. The proplem is that the server instance is located
-//       on the stack. I think we can use `javaagent` for this

@@ -1,1 +1,1 @@
--cp thirdparty/json-simple/json-simple.jar Download.java
+-cp thirdparty/json-simple/json-simple.jar:thirdparty/minecraft-decompiler/MinecraftDecompiler.jar Download.java

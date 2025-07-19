@@ -1,0 +1,1 @@
+-cp thirdparty/minecraft-decompiler/MinecraftDecompiler.jar:thirdparty/javassist/javassist.jar Build.java

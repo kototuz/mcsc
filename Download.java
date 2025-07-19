@@ -13,6 +13,16 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.io.File;
+
+import cn.maxpixel.mcdecompiler.reader.ClassifiedMappingReader;
+import cn.maxpixel.mcdecompiler.util.Utils;
+import cn.maxpixel.mcdecompiler.util.JarUtil;
+import cn.maxpixel.mcdecompiler.util.FileUtil;
+import cn.maxpixel.mcdecompiler.ClassifiedDeobfuscator;
+import cn.maxpixel.mcdecompiler.mapping.PairedMapping;
+import cn.maxpixel.mcdecompiler.reader.AbstractMappingReader;
+import cn.maxpixel.mcdecompiler.mapping.Mapping;
 
 import org.json.simple.*;
 
@@ -25,26 +35,23 @@ public class Download {
     static String     versionStr;
     static JSONObject versionJson;
     static JSONObject versionDownloadsJson;
-    static String     mappingsStr;
 
     public static void main(String[] args) throws Exception {
         if (args.length == 0) {
             downloadManifest();
             downloadLatestVersionInfo();
-            extractBrigadierLibName();
             downloadMappings();
-            extractMappingsIntoClass();
             downloadServer();
+            deobfuscateServerCode();
             return;
         }
 
         if (args.length == 1 && args[0].charAt(0) != '-') {
             downloadManifest();
             downloadVersionInfo(args[0]);
-            extractBrigadierLibName();
             downloadMappings();
-            extractMappingsIntoClass();
             downloadServer();
+            deobfuscateServerCode();
             return;
         }
 
@@ -76,20 +83,26 @@ public class Download {
             writeStringToFile(versionStr, "version.json");
             break;
 
-        case "-download-mappings-file":
-            downloadManifest();
-            if (args.length > 1)
-                downloadVersionInfo(args[1]);
-            else
-                downloadLatestVersionInfo();
-            downloadMappings();
-            writeStringToFile(mappingsStr, "mappings.txt");
-            break;
-
         default:
             System.err.println("error: invalid option");
             help();
             System.exit(1);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    static void deobfuscateServerCode() throws Exception {
+        info("deobfuscating server code...");
+        try (var launcherFs = JarUtil.createZipFs(Paths.get("build/version/server_launcher.jar"))) {
+            var paths = FileUtil.iterateFiles(launcherFs.getPath(""));
+            var serverJarPath = paths
+                .filter(p -> p.startsWith("META-INF/versions/"))
+                .findFirst().get();
+
+            var mappingsPath = "./build/version/mappings.txt";
+            var reader = new ClassifiedMappingReader<>(Utils.tryIdentifyingMappingType(mappingsPath), mappingsPath);
+            var deobfuscator = new ClassifiedDeobfuscator((ClassifiedMappingReader<PairedMapping>) reader);
+            deobfuscator.deobfuscate(serverJarPath, Paths.get("build/version/server.jar"));
         }
     }
 
@@ -100,8 +113,7 @@ public class Download {
                 -help                                 print this help
                 -list-versions                        list all available versions
                 -download-manifest-file               download manifest as file 
-                -download-version-file [<version>]    download version info as file 
-                -download-mappings-file [<version>]   download mappings as file"""
+                -download-version-file [<version>]    download version info as file"""
         );
     }
 
@@ -138,38 +150,38 @@ public class Download {
         var serverMappingsURL = ((JSONObject)versionDownloadsJson
                 .get("server_mappings"))
                 .get("url").toString();
-        mappingsStr = downloadFileAsString(serverMappingsURL);
+        downloadFileAsFile(serverMappingsURL, "build/version/mappings.txt");
     }
 
     static void downloadServer() throws Exception {
         info("downloading server...");
         var server = (JSONObject) versionDownloadsJson.get("server");
-        downloadFileAsFile(server.get("url").toString(), "build/version/server.jar");
+        downloadFileAsFile(server.get("url").toString(), "build/version/server_launcher.jar");
     }
 
     // TODO: Different versions have different changes in command system.
     //       I think we should not implement this function for each version
     //       in `Download.java`. We can just extract all mappings and
     //       generate a class.
-    static void extractMappingsIntoClass() throws Exception {
-        var matcher = Pattern.compile(
-            "net\\.minecraft\\.commands\\.PermissionSource -> (\\w+):"
-        ).matcher(mappingsStr);
-        if (!matcher.find()) {
-            info("mappings not found");
-            return;
-        }
-
-        writeStringToFile(
-            """
-            package build;
-            public class Mappings {
-                public static final String PERMISSION_SOURCE = \"%s\";
-            }
-            """.formatted(matcher.group(1)),
-            "build/version/Mappings.java"
-        );
-    }
+    // static void extractMappingsIntoClass() throws Exception {
+    //     var matcher = Pattern.compile(
+    //         "net\\.minecraft\\.commands\\.PermissionSource -> (\\w+):"
+    //     ).matcher(mappingsStr);
+    //     if (!matcher.find()) {
+    //         info("mappings not found");
+    //         return;
+    //     }
+    //
+    //     writeStringToFile(
+    //         """
+    //         package build;
+    //         public class Mappings {
+    //             public static final String PERMISSION_SOURCE = \"%s\";
+    //         }
+    //         """.formatted(matcher.group(1)),
+    //         "build/version/Mappings.java"
+    //     );
+    // }
 
     static void extractBrigadierLibName() throws Exception {
         var brigadierLibName = find((JSONArray)versionJson.get("libraries"), (obj) -> {

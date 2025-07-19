@@ -5,12 +5,9 @@
 
 ## How it works
 
-We install [minecraft server](https://www.minecraft.net/en-us/download/server).
-The server uses different libraries.
-We need the [brigadier](https://github.com/Mojang/brigadier) library because
-it is an opensource project. We replace this library with our version.
-Now we can intercept the Minecraft command parser and use it for
-our advantage. 
+We install [minecraft server](https://www.minecraft.net/en-us/download/server),
+remap the server code and inject our code using `javassist`. Thus we get the
+command parser.
 
 If we start minecraft server every time we want to check the file with
 commands it will be so slow. That's why we create client-server model.
@@ -33,7 +30,7 @@ java @download.txt 1.21.7
 
 Build:
 ``` console
-java Build.java
+java @build.txt
 ```
 
 ## Usage
@@ -46,10 +43,11 @@ Run server:
 > and if it does not find them it will produce new ones
 
 ``` console
-java -jar build/bin/mcsc_server.jar
+java -jar build/bin/server_launcher.jar --help
+java -jar build/bin/server_launcher.jar
 ```
 
 Client:
 ``` console
-java -jar build/bin/mcsc_client.jar <files>
+java -jar build/bin/client.jar <files>
 ```
