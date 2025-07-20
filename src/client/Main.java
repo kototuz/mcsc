@@ -28,6 +28,7 @@ public class Main {
                 pipe.write(String.join("\n", args));
             }
 
+            // TODO: Timeout? If server is not running it will go infinitely
             var size = pipe.channel.size();
             while (pipe.channel.size() == size) {}
 
