@@ -8,6 +8,11 @@ import java.nio.file.Files;
 
 public class Main {
     public static void main(String[] args) throws Throwable {
+        if (args.length == 0) {
+            System.out.println("args: <file1> <file2>...");
+            return;
+        }
+
         for (int i = 0; i < args.length; i++) {
             var relativePath = Paths.get(args[i]);
             if (!Files.exists(relativePath)) {
