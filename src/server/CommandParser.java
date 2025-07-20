@@ -36,25 +36,31 @@ public class CommandParser {
     public int parseFile(String filePath) throws Exception {
         var errorCount = 0;
         try (var reader = Files.newBufferedReader(Paths.get(filePath))) {
+            int line = 0;
             while (true) {
                 String command;
                 while (true) {
                     command = reader.readLine();
+                    line += 1;
                     if (command == null) return errorCount;
                     command = command.trim();
-                    if (command.equals("")) continue;
+                    if (command.equals(""))       continue;
                     if (command.charAt(0) == '#') continue;
                     break;
                 }
 
-                errorCount += parseCommand(command);
+                errorCount += parseCommand(command, filePath, line);
             }
         }
     }
 
     // TODO: Move the the function body to `parseFile()` to print
     //       the error file name and line?
-    public int parseCommand(String command) throws Exception {
+    public int parseCommand(
+        String command,
+        String filePath,
+        int    line
+    ) throws Exception {
         var results = this.dispatcher.invoke(
             sig("parse", String.class, Object.class),
             command,
@@ -93,15 +99,18 @@ public class CommandParser {
         } catch (InvocationTargetException t) {
             var e = new ObjectWrapper(t.getCause());
 
-            // TODO: Print the file name and line
-            //       Maybe client should put the `cwd` and relative file path
+            // TODO: Maybe client should put the `cwd` and relative file path
             //       to the pipe. This way we achive the file name printing as
             //       in compilers
             var msg = (String) e
                 .invoke(sig("getRawMessage"))
                 .invoke(sig("getString"))
                 .object;
-            this.pipe.write(msg + "\n");
+            this.pipe.write(String.format(
+                "%s:%d: %s\n",
+                filePath, line,
+                msg
+            ));
 
             var input = (String) e.invoke(sig("getInput")).object;
             var cursor = (int) e.invoke(sig("getCursor")).object;
