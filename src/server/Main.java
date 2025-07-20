@@ -14,7 +14,14 @@ public class Main {
     }
 
     public static void main(Object server) throws Exception {
-        // TODO: Notify about launching
+        System.out.print(
+            """
+            ========================================
+                        MCSC IS RUNNING!            
+            ========================================
+            """
+        );
+
         try (var pipe = new FilePipe()) {
             long size = 0;
             var parser = new CommandParser(server, pipe);
