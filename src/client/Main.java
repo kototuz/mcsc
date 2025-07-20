@@ -19,12 +19,16 @@ public class Main {
                 System.err.println("error: '" + args[i] + "' does not exist");
                 return;
             }
-
-            args[i] = relativePath.toAbsolutePath().toString();
         }
 
         try (var pipe = new FilePipe()) {
             try (var lock = pipe.lockForWrite()) {
+                // protocol:
+                //     <cwd>
+                //     <file-path-relative-to-cwd>
+                //     <file-path-relative-to-cwd>
+                //     ...
+                pipe.write(Paths.get("").toAbsolutePath().toString() + "\n");
                 pipe.write(String.join("\n", args));
             }
 

@@ -1,5 +1,8 @@
 package server;
 
+import java.util.Arrays;
+import java.nio.file.Paths;
+
 import utils.FilePipe;
 
 public class Main {
@@ -36,8 +39,15 @@ public class Main {
                         filePaths = pipe.read().split("\n");
                     }
 
+                    for (var p : filePaths)
+                        System.out.println(p);
+
                     try (var lock = pipe.lockForWrite()) {
-                        parser.parseFiles(filePaths);
+                        parser.parseFiles(
+                            Paths.get(filePaths[0]),
+                            Arrays.copyOfRange(filePaths, 1, filePaths.length)
+                        );
+
                         size = pipe.channel.size();
                     }
                 } catch (Exception e) {
