@@ -30,6 +30,8 @@ public class Download {
     static final HttpClient HTTP_CLIENT      = HttpClient.newHttpClient();
     static final String VERSION_MANIFEST_URL = "https://launchermeta.mojang.com/mc/game/version_manifest.json";
 
+    static Path versionDirPath;
+
     static String     manifestStr;
     static JSONObject manifestJson;
     static String     versionStr;
@@ -93,16 +95,16 @@ public class Download {
     @SuppressWarnings("unchecked")
     static void deobfuscateServerCode() throws Exception {
         info("deobfuscating server code...");
-        try (var launcherFs = JarUtil.createZipFs(Paths.get("build/version/server_launcher.jar"))) {
+        try (var launcherFs = JarUtil.createZipFs(versionDirPath.resolve("server_launcher.jar"))) {
             var paths = FileUtil.iterateFiles(launcherFs.getPath(""));
             var serverJarPath = paths
                 .filter(p -> p.startsWith("META-INF/versions/"))
                 .findFirst().get();
 
-            var mappingsPath = "./build/version/mappings.txt";
+            var mappingsPath = versionDirPath.resolve("mappings.txt").toString();
             var reader = new ClassifiedMappingReader<>(Utils.tryIdentifyingMappingType(mappingsPath), mappingsPath);
             var deobfuscator = new ClassifiedDeobfuscator((ClassifiedMappingReader<PairedMapping>) reader);
-            deobfuscator.deobfuscate(serverJarPath, Paths.get("build/version/server.jar"));
+            deobfuscator.deobfuscate(serverJarPath, versionDirPath.resolve("server.jar"));
         }
     }
 
@@ -136,6 +138,8 @@ public class Download {
         versionStr = downloadFileAsString(versionURL);
         versionJson = (JSONObject) JSONValue.parseWithException(versionStr);
         versionDownloadsJson = (JSONObject) versionJson.get("downloads");
+
+        versionDirPath = Paths.get("build/versions/" + version);
     }
 
     static void downloadLatestVersionInfo() throws Exception {
@@ -150,13 +154,13 @@ public class Download {
         var serverMappingsURL = ((JSONObject)versionDownloadsJson
                 .get("server_mappings"))
                 .get("url").toString();
-        downloadFileAsFile(serverMappingsURL, "build/version/mappings.txt");
+        downloadFileAsFile(serverMappingsURL, versionDirPath.resolve("mappings.txt"));
     }
 
     static void downloadServer() throws Exception {
         info("downloading server...");
         var server = (JSONObject) versionDownloadsJson.get("server");
-        downloadFileAsFile(server.get("url").toString(), "build/version/server_launcher.jar");
+        downloadFileAsFile(server.get("url").toString(), versionDirPath.resolve("server_launcher.jar"));
     }
 
     // TODO: Different versions have different changes in command system.
@@ -211,8 +215,7 @@ public class Download {
         throw new RuntimeException("Element not found");
     }
 
-    static void downloadFileAsFile(String fileURL, String outputPathString) throws Exception {
-        Path outputPath = Paths.get(outputPathString);
+    static void downloadFileAsFile(String fileURL, Path outputPath) throws Exception {
         Files.createDirectories(outputPath.getParent());
         Files.copy(
             new URI(fileURL).toURL().openStream(),

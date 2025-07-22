@@ -21,15 +21,26 @@ import javassist.bytecode.ConstPool;
 import javassist.bytecode.Bytecode;
 
 public class Build {
+    static Path versionDirPath;
+
     public static void main(String[] args) throws Exception {
-        if (args.length == 0) {
+        switch (args.length) {
+        case 0:
+            throw new RuntimeException("version must be provided");
+
+        case 1:
+            versionDirPath = Paths.get("build/versions/" + args[0]);
             compile();
             buildServer();
             buildClient();
             return;
+
+        default:
+            versionDirPath = Paths.get("build/versions/" + args[0]);
+            break;
         }
 
-        switch (args[0]) {
+        switch (args[1]) {
         case "compile":
             compile();
             break;
@@ -56,13 +67,13 @@ public class Build {
         Files.createDirectories(Paths.get("build/bin/"));
 
         Files.copy(
-            Paths.get("build/version/server.jar"),
+            versionDirPath.resolve("server.jar"),
             Paths.get("build/bin/server.jar"),
             StandardCopyOption.REPLACE_EXISTING
         );
 
         Files.copy(
-            Paths.get("build/version/server_launcher.jar"),
+            versionDirPath.resolve("server_launcher.jar"),
             Paths.get("build/bin/server_launcher.jar"),
             StandardCopyOption.REPLACE_EXISTING
         );
@@ -213,3 +224,5 @@ public class Build {
         public void run() throws Exception;
     }
 }
+
+// TODO: Add -help
