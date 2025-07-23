@@ -2,6 +2,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.stream.*;
+import java.util.jar.Manifest;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -64,24 +65,38 @@ public class Build {
     static void buildServer() throws Exception {
         info("building server...");
 
+        // TODO: move it to the main()
         Files.createDirectories(Paths.get("build/bin/"));
 
+        var serverJar = versionDirPath.resolve("server.jar");
+        var serverLauncherJar = versionDirPath.resolve("server_launcher.jar");
+
         Files.copy(
-            versionDirPath.resolve("server.jar"),
+            serverJar,
             Paths.get("build/bin/server.jar"),
             StandardCopyOption.REPLACE_EXISTING
         );
 
-        Files.copy(
-            versionDirPath.resolve("server_launcher.jar"),
-            Paths.get("build/bin/server_launcher.jar"),
-            StandardCopyOption.REPLACE_EXISTING
-        );
+        if (Files.exists(serverLauncherJar)) {
+            Files.copy(
+                serverLauncherJar,
+                Paths.get("build/bin/server_launcher.jar"),
+                StandardCopyOption.REPLACE_EXISTING
+            );
 
-        injectOurCodeInto("build/bin/server.jar");
-        injectServerJarInto("build/bin/server_launcher.jar");
+            injectOurCodeInto("build/bin/server.jar");
+            injectServerJarInto("build/bin/server_launcher.jar");
 
-        Files.delete(Paths.get("build/bin/server.jar"));
+            Files.delete(Paths.get("build/bin/server.jar"));
+        } else {
+            injectOurCodeInto("build/bin/server.jar");
+
+            Files.move(
+                Paths.get("build/bin/server.jar"),
+                Paths.get("build/bin/server_launcher.jar"),
+                StandardCopyOption.REPLACE_EXISTING
+            );
+        }
     }
 
     static void buildClient() throws Exception {
@@ -135,7 +150,7 @@ public class Build {
         var pool = ClassPool.getDefault();
         pool.appendClassPath(serverJarPath);
 
-        var cc = pool.get("net.minecraft.server.Main");
+        var cc = pool.get(getJarMainClassName(serverJarFs));
         var cf = cc.getClassFile();
 
         var methodInfo = cf.getMethod("main");
@@ -161,21 +176,30 @@ public class Build {
         );
     }
 
+    static String getJarMainClassName(FileSystem jarFs) throws Exception {
+        var manifestStream = Files.newInputStream(jarFs.getPath("META-INF/MANIFEST.MF"));
+        var manifest = new Manifest(manifestStream);
+        var attr = manifest.getMainAttributes();
+        return attr.getValue("Main-Class");
+    }
+
     static int skipUntilServerStoreInst(CodeIterator codeIter, ConstPool cp) throws Exception {
         while (codeIter.hasNext()) {
             int inst_begin_idx = codeIter.next();
-            if (codeIter.byteAt(inst_begin_idx) == Opcode.INVOKESTATIC) {
-                var returnClassName = cp.getMethodrefClassName(codeIter.u16bitAt(inst_begin_idx + 1));
-                if (returnClassName.equals("net.minecraft.server.MinecraftServer")) {
-                    while (codeIter.hasNext()) {
-                        inst_begin_idx = codeIter.next();
-                        if (codeIter.byteAt(inst_begin_idx) == Opcode.ASTORE) {
-                            return inst_begin_idx;
-                        }
-                    }
+            int opcode = codeIter.byteAt(inst_begin_idx);
+            if (opcode != Opcode.INVOKESTATIC && opcode != Opcode.INVOKESPECIAL)
+                continue;
 
-                    throw new RuntimeException("Could not find server store instruction");
+            var returnClassName = cp.getMethodrefClassName(codeIter.u16bitAt(inst_begin_idx + 1));
+            if (returnClassName.equals("net.minecraft.server.MinecraftServer") ||
+                returnClassName.equals("net.minecraft.server.dedicated.DedicatedServer")) {
+                while (codeIter.hasNext()) {
+                    inst_begin_idx = codeIter.next();
+                    if (codeIter.byteAt(inst_begin_idx) == Opcode.ASTORE) {
+                        return inst_begin_idx;
+                    }
                 }
+                throw new RuntimeException("Could not find server store instruction");
             }
         }
 

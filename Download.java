@@ -95,23 +95,39 @@ public class Download {
     @SuppressWarnings("unchecked")
     static void deobfuscateServerCode() throws Exception {
         info("deobfuscating server code...");
-        try (var launcherFs = JarUtil.createZipFs(versionDirPath.resolve("server_launcher.jar"))) {
-            var paths = FileUtil.iterateFiles(launcherFs.getPath(""));
-            var serverJarPath = paths
-                .filter(p -> p.startsWith("META-INF/versions/"))
-                .findFirst().get();
 
-            var mappingsPath = versionDirPath.resolve("mappings.txt").toString();
-            var reader = new ClassifiedMappingReader<>(Utils.tryIdentifyingMappingType(mappingsPath), mappingsPath);
-            var deobfuscator = new ClassifiedDeobfuscator((ClassifiedMappingReader<PairedMapping>) reader);
-            deobfuscator.deobfuscate(serverJarPath, versionDirPath.resolve("server.jar"));
+        var serverLauncherPath = versionDirPath.resolve("server_launcher.jar");
+        var launcherFs = JarUtil.createZipFs(serverLauncherPath);
+
+        var paths = FileUtil.iterateFiles(launcherFs.getPath(""));
+        var serverJarPath = paths
+            .filter(p -> p.startsWith("META-INF/versions/"))
+            .filter(p -> p.toString().endsWith(".jar"))
+            .findFirst();
+
+        var mappingsPath = versionDirPath.resolve("mappings.txt").toString();
+        var reader = new ClassifiedMappingReader<>(Utils.tryIdentifyingMappingType(mappingsPath), mappingsPath);
+        var deobfuscator = new ClassifiedDeobfuscator((ClassifiedMappingReader<PairedMapping>) reader);
+        if (serverJarPath.isPresent()) {
+            // If server is in jar
+            deobfuscator.deobfuscate(serverJarPath.get(), versionDirPath.resolve("server.jar"));
+            launcherFs.close();
+        } else {
+            // if server code is located directly in launcher jar
+            deobfuscator.deobfuscate(
+                serverLauncherPath,
+                versionDirPath.resolve("server.jar") // TODO: Rename to `server_launcher.jar`
+            );
+
+            launcherFs.close();
+            Files.delete(serverLauncherPath);
         }
     }
 
     static void help() {
         System.out.println("""
             available arguments:
-                [<version>]                           download <version> or latest
+            [<version>]                           download <version> or latest
                 -help                                 print this help
                 -list-versions                        list all available versions
                 -download-manifest-file               download manifest as file 
