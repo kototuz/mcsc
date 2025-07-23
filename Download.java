@@ -179,30 +179,6 @@ public class Download {
         downloadFileAsFile(server.get("url").toString(), versionDirPath.resolve("server_launcher.jar"));
     }
 
-    // TODO: Different versions have different changes in command system.
-    //       I think we should not implement this function for each version
-    //       in `Download.java`. We can just extract all mappings and
-    //       generate a class.
-    // static void extractMappingsIntoClass() throws Exception {
-    //     var matcher = Pattern.compile(
-    //         "net\\.minecraft\\.commands\\.PermissionSource -> (\\w+):"
-    //     ).matcher(mappingsStr);
-    //     if (!matcher.find()) {
-    //         info("mappings not found");
-    //         return;
-    //     }
-    //
-    //     writeStringToFile(
-    //         """
-    //         package build;
-    //         public class Mappings {
-    //             public static final String PERMISSION_SOURCE = \"%s\";
-    //         }
-    //         """.formatted(matcher.group(1)),
-    //         "build/version/Mappings.java"
-    //     );
-    // }
-
     static void extractBrigadierLibName() throws Exception {
         var brigadierLibName = find((JSONArray)versionJson.get("libraries"), (obj) -> {
             var library = (JSONObject) obj;
