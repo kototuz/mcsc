@@ -25,6 +25,8 @@ public class Build {
     static Path versionDirPath;
 
     public static void main(String[] args) throws Exception {
+        Files.createDirectories(Paths.get("build/bin/"));
+
         switch (args.length) {
         case 0:
             throw new RuntimeException("version must be provided");
@@ -64,9 +66,6 @@ public class Build {
 
     static void buildServer() throws Exception {
         info("building server...");
-
-        // TODO: move it to the main()
-        Files.createDirectories(Paths.get("build/bin/"));
 
         var serverJar = versionDirPath.resolve("server.jar");
         var serverLauncherJar = versionDirPath.resolve("server_launcher.jar");

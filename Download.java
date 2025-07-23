@@ -127,7 +127,7 @@ public class Download {
     static void help() {
         System.out.println("""
             available arguments:
-            [<version>]                           download <version> or latest
+                [<version>]                           download <version> or latest
                 -help                                 print this help
                 -list-versions                        list all available versions
                 -download-manifest-file               download manifest as file 
