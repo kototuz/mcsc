@@ -3,6 +3,10 @@
 > [!WARNING]
 > The software is unfinished
 
+> [!NOTE]
+> Many versions are not supported now.
+> If you want you can create a pr to add support.
+
 ## How it works
 
 We install [minecraft server](https://www.minecraft.net/en-us/download/server),
@@ -19,10 +23,6 @@ through a file, which is something like a pipe.
 
 Download version stuff:
 
-> [!WARNING]
-> At the moment it is recommended to use only `1.21.7` version.
-> Other versions may not work
-
 ``` console
 java @download.txt -help
 java @download.txt 1.21.7
@@ -30,7 +30,7 @@ java @download.txt 1.21.7
 
 Build:
 ``` console
-java @build.txt
+java @build.txt 1.21.7
 ```
 
 ## Usage
@@ -50,4 +50,12 @@ java -jar build/bin/server_launcher.jar
 Client:
 ``` console
 java -jar build/bin/client.jar <files>
+```
+
+## Test
+
+You can test the downloaded version:
+```console
+/test.py --help
+/test.py <version>
 ```
