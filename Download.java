@@ -14,6 +14,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.io.File;
+import java.io.FileOutputStream;
 
 import cn.maxpixel.mcdecompiler.reader.ClassifiedMappingReader;
 import cn.maxpixel.mcdecompiler.util.Utils;
@@ -139,6 +140,19 @@ public class Download {
         info("downloading version manifest...");
         manifestStr = downloadFileAsString(VERSION_MANIFEST_URL);
         manifestJson = (JSONObject) JSONValue.parseWithException(manifestStr);
+
+        // Save version list to file
+        try (var f = new FileOutputStream("build/versions/list.txt")) {
+            var versions = (JSONArray) manifestJson.get("versions");
+            for (var obj : versions) {
+                var version = (JSONObject) obj;
+                var id = version.get("id").toString() + "\n"; 
+
+                f.write(id.getBytes());
+
+                if (id.equals("19w36a\n")) break;
+            }
+        }
     }
 
     static void downloadVersionInfo(String version) throws Exception {
