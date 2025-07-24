@@ -3,6 +3,7 @@
 import os
 import sys
 import shutil
+import argparse
 import subprocess as sp
 from threading import Thread
 from time import sleep
@@ -375,6 +376,7 @@ def test_version(version, stdout=None):
         f.write("say Hello, world\nsummon pig")
 
     # Launcher server
+    # TODO: The pipe may not exist
     pipe_last_mtime = os.stat("/tmp/mcsc.pipe").st_mtime
     server = sp.Popen([
         "java",
@@ -398,13 +400,34 @@ def test_version(version, stdout=None):
 
     return client_proc.stdout
 
-if len(sys.argv) == 1:
+parser = argparse.ArgumentParser(
+        prog="Test",
+        description="Integration test")
+
+parser.add_argument("--version", nargs="?")
+parser.add_argument("-v", action="store_true")
+
+args = parser.parse_args()
+
+def verbose_test(version):
+    print(f"TEST: {version}")
+    res = test_version(version)
+    if res == b"success\n":
+        print("TEST PASSED")
+    else:
+        print("TEST FAILED")
+
+def not_verbose_test(version):
+    print(f"testing {version}... ", end='', flush=True)
+    res = test_version(version, sp.DEVNULL)
+    if res == b"success\n":
+        print("passed")
+    else:
+        print("failed")
+
+test_fn = verbose_test if args.v else not_verbose_test
+if args.version == None:
     for version in reversed(VERSIONS):
-        print(f"testing {version}... ", end='', flush=True)
-        res = test_version(version, sp.DEVNULL)
-        if res == b"success\n":
-            print("passed")
-        else:
-            print("failed")
+        test_fn(version)
 else:
-    res = test_version(sys.argv[1])
+    test_fn(args.version)
